@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- 
+    项目目前存在的问题：
+    1.图像的绘制
+    2.历史记录每条都会添加到左侧，想要实现的是一轮会话作为一条历史记录存储
+    3.当一条新的问答添加到左侧时，如果不刷新，点击这一条新的问答，显示的只有问题没有回答
+    4.上传的文件是csv
+ -->
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat2GM</title>
+    <!-- 引入 Bootstrap CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css">
+    <!--    引入ajax-->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <!--    引入echarts-->
+    <!-- <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.3.2/echarts.min.js"></script> -->
+    <style>
+        .fas {
+            font-size: 24px;
+            /* 调整图标大小 */
+        }
+
+        /* 添加额外的边距来分隔消息 */
+        .message-question,
+        .message-answer {
+            margin-bottom: 10px;
+            /* 在消息之间添加一些空间 */
+        }
+
+        /* 代码区域样式 */
+        pre {
+            background-color: #f7f7f7;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 10px;
+            overflow-x: auto;
+        }
+
+        .code {
+            font-family: 'Courier New', Courier, monospace;
+            color: #333;
+            line-height: 1.5;
+        }
+
+        /* 上传csv文件样式 */
+        .file-upload-wrapper {
+            border: 2px dashed #ccc;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+        }
+
+        .file-upload-label {
+            display: inline-block;
+            padding: 10px;
+        }
+
+        .file-name {
+            margin-top: 10px;
+        }
+
+        /* 右侧区域 */
+        .right {
+            text-align: center;
+            /* 确保所有内容居中对齐 */
+        }
+
+        /* 上传csv文件的样式 */
+        .file-upload-wrapper {
+            border: 2px dashed #ccc;
+            padding: 20px;
+            /* 增加内边距以便更好地定位加号 */
+            text-align: center;
+            cursor: pointer;
+            position: relative;
+            /* 设置为相对定位，以便子元素可以相对于它定位 */
+            display: inline-block;
+            width: calc(100% - 15px);
+            /* 计算宽度，减去两侧边框的宽度和内边距的两倍 */
+            box-sizing: border-box;
+            /* 让内边距和边框计算在内 */
+        }
+
+        .file-upload-label {
+            display: flex;
+            /* 使用flex布局 */
+            justify-content: center;
+            /* 水平居中 */
+            align-items: center;
+            /* 垂直居中 */
+            padding: 10px;
+            width: 100%;
+            /* 完全填充父容器 */
+            height: 100px;
+            /* 设置高度 */
+        }
+
+        .fas.fa-plus {
+            font-size: 24px;
+            /* 增加图标的大小 */
+        }
+
+        .file-name {
+            margin-top: 10px;
+        }
+
+        .list-group-item {
+            /* width: 280px; */
+            /* height: 45px; */
+            overflow: hidden;
+            /* 如果文本过长，隐藏溢出部分 */
+            text-overflow: ellipsis;
+            /* 用省略号表示被截断的文本 */
+            white-space: nowrap;
+            /* 防止文本换行 */
+            /* margin-top: 10px; */
+            font-weight: normal;
+            border-radius: 5px;
+            /* border: 2px solid #4b70e2; */
+            border: none;
+            cursor: pointer;
+            margin-bottom: 3px;
+        }
+
+        /* Hover effect when item is not selected */
+        .list-group-item:hover:not(.selected) {
+            background-color: #f5f5f5;
+        }
+
+
+        .selected {
+            background-color: #f5f5f5;
+            color: #36ad6a;
+        }
+
+        .selected .fa-comment-dots {
+            color: #36ad6a !important;
+        }
+
+        /* 按钮的样式  */
+        .btn {
+            width: 100px;
+            /* background-color: #4b70e2; */
+            background-color: #36ad6a;
+            color: #fff;
+        }
+
+        #sendMessage:hover {
+            /* background-color: #4b70e2; */
+            background-color: #36ad6a;
+            color: #fff;
+        }
+
+        /* 发送消息的样式 */
+        .message-question .message-content {
+            display: flex;
+            justify-content: flex-end;
+            /* 将内容推至右侧 */
+            align-items: flex-start;
+            /* 垂直对齐 */
+        }
+
+        .message-question .message-content p {
+            margin: 0;
+            margin-left: 20px;
+            margin-top: 9px;
+            /* 根据需要调整内边距 */
+            max-width: 878px;
+            /* 使用 max-width 而不是 width，以便文本可以折行 */
+            text-align: left;
+
+            padding: 10px;
+            /* 文本左对齐 */
+            /* background-color: #4b70e2; */
+            background-color: #d2f9d1;
+            /* color: #ecf0f3; */
+            /* font-size: large; */
+            border-radius: 6px;
+        }
+
+        .message-question .message-content .user-icon {
+            margin-left: 5px;
+            /* 左侧内边距，与文本保持一定距离 */
+        }
+
+        /* 回复消息的样式 */
+        .message-answer .answer-content {
+            display: flex;
+            align-items: flex-start;
+            /* 如果需要垂直居中 */
+        }
+
+        .message-answer .answer-content p {
+            margin: 0;
+            max-width: 878px;
+            margin-top: 9px;
+            text-align: left;
+            margin-right: 20px;
+            border-radius: 6px;
+            padding: 10px;
+            /* font-size: large; */
+            background-color: #f4f6f8;
+
+        }
+
+        .message-answer .answer-content .robot-icon {
+            margin-right: 10px;
+        }
+
+        .file-upload-label {
+            /* width: 250px; */
+            /* height: 100px; */
+            border: 2px dashed #ccc;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* 新建对话区域 */
+        #newChatArea {
+            margin-top: 20px;
+            border-radius: 5px;
+            height: 45px;
+            border: 2px dashed #ccc;
+        }
+
+        #newChatArea:hover {
+            /* background-color: #ececec; */
+            color: #36ad6a;
+        }
+
+        /* 文件成功上传 */
+        .success-icon {
+            font-size: 16px;
+            /* Adjust the size as needed */
+            color: #36ad6a;
+            /* Adjust the color if necessary */
+        }
+
+        /* 历史记录名称 */
+        .list-title h5 {
+            font-size: 14px;
+            color: #9b9b9b;
+        }
+
+        /* 添加列表的 margin 值 */
+        .list-group {
+            margin-bottom: 20px;
+        }
+
+        /* 历史记录的图标样式 */
+        .list-group-item .fa-comment-dots {
+            color: #ccc;
+        }
+
+        /* CSS for making the New Chat area sticky */
+        .sticky-top {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            /* Adjust z-index as needed */
+            /* background-color: #f8f7f7; */
+            /* Background color of the sticky area */
+            padding: 5px;
+            /* Adjust padding as needed */
+        }
+
+        /* CSS for chat history wrapper */
+        #chatHistoryWrapper {
+            border-right: 1px solid #ccc;
+            height: 92vh;
+            /* Adjust height as needed */
+            overflow-y: auto;
+            /* Enable vertical scrolling */
+        }
+    </style>
+
+</head>
+
+<body>
+    <!--头部-->
+    <nav class="navbar navbar-expand-lg navbar-light" style="background-color: #f8f7f7;">
+        <div class="container d-flex justify-content-center">
+            <img src="../static/img/cell.png" alt="" width="32px;"> &nbsp; &nbsp;
+            <a class="navbar-brand" href="#">Chat2GM — A chat AI module for gut microbiota data analysis</a>
+        </div>
+    </nav>
+    <div class="container">
+        <div class="row">
+            <!-- 左侧历史聊天 -->
+            <!-- style="border-right:1px solid #ccc; height:92vh;overflow-y:auto;flex-grow:1; border-left: 1px solid #ccc;" -->
+            <div class="col-3" style="border-right: 1px solid #ccc;border-left: 1px solid #ccc;">
+                <!-- 新建对话 -->
+                <div id="newChatWrapper" class="sticky-top">
+                    <div id="newChatArea" class="d-flex justify-content-between align-items-center mb-3"
+                        style="cursor: pointer; padding: 0 15px;">
+                        <div class="d-flex align-items-center">
+                            <i class="far fa-comment-dots me-2" style="font-size: 24px;"></i>
+                            <span>New Chat</span>
+                        </div>
+                        <div>
+                            <i class="fas fa-pen" style="font-size: 20px;" title="New Chat"></i>
+                        </div>
+                    </div>
+                </div>
+                <!-- 渲染历史记录 按照时间进行 分类 -->
+                <div id="chatHistoryWrapper" style="overflow-y: auto; height: 80vh;">
+                    <div class="today list-title">
+                        <h5>Today</h5>
+                        <ul class="list-group message-question" id="todayChats">
+                            {% if chat_histories["today"] %}
+                            {% for chat_id, history in chat_histories["today"] %}
+                            <li class="list-group-item" data-chat-id="{{ chat_id }}"
+                                data-answer="{{ history.response }}">
+                                <i class="far fa-comment-dots"></i>
+                                {{ history.message }}
+                            </li>
+                            {% endfor %}
+                            {% else %}
+
+                            <span style="text-align: center; color: #a8a09b;">null</span>
+                            {% endif %}
+                        </ul>
+                    </div>
+
+                    <div class="yesterday list-title">
+                        <h5>Yesterday</h5>
+                        <ul class="list-group message-question" id="yesterdayChats">
+                            {% if chat_histories["yesterday"] %}
+                            {% for chat_id, history in chat_histories["yesterday"] %}
+                            <li class="list-group-item" data-chat-id="{{ chat_id }}"
+                                data-answer="{{ history.response }}">
+                                <i class="far fa-comment-dots"></i>
+                                {{ history.message }}
+                            </li>
+                            {% endfor %}
+                            {% else %}
+
+                            <span style="text-align: center; color: #a8a09b;">null</span>
+                            {% endif %}
+                        </ul>
+                    </div>
+
+                    <div class="older list-title">
+                        <h5>Older</h5>
+                        <ul class="list-group message-question" id="olderChats">
+                            {% if chat_histories["older"] %}
+                            {% for chat_id, history in chat_histories["older"] %}
+                            <li class="list-group-item" data-chat-id="{{ chat_id }}"
+                                data-answer="{{ history.response }}">
+                                <i class="far fa-comment-dots"></i>
+                                {{ history.message }}
+                            </li>
+                            {% endfor %}
+                            {% else %}
+                            <span style="text-align: center; color: #a8a09b;">null</span>
+                            {% endif %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- 中部聊天记录 -->
+            <div class="col-6 d-flex flex-column" style="height:92vh;">
+                <div class="chat-box" style="overflow-y:auto;flex-grow:1;margin-top:10px;" id="chatBox">
+                    <!--                    存放聊天记录-->
+                </div>
+                <!--                输入框区域-->
+                <div class="input-group mt-2">
+                    <input type="text" id="messageInput" class="form-control" placeholder="Please enter a message...">
+                    <button class="btn" id="sendMessage"><i class="fas fa-paper-plane"></i></button>
+                </div>
+            </div>
+
+            <!-- 右侧设置 -->
+            <div class="col-3 right" style="border-left:1px solid #ccc; border-right: 1px solid #ccc;">
+                <!-- 提交csv文件-->
+                <div class="file-upload-wrapper" id="fileUploadWrapper" style="margin-bottom:115px;margin-top:20px;">
+                    <label for="fileUpload" class="file-upload-label">
+                        {% if flag %}
+                        <i class="fas fa-upload" style="font-size:28px;"></i>
+                        {% else %}
+                        <i class="far fa-file-excel" style="font-size:28px;"></i>
+                        {% endif %}
+                        <p style="display: block; margin: 5px 0 0 0;">Upload data</p>
+                        <input type="file" id="fileUpload" accept=".csv" style="display: none;" />
+                    </label>
+                    <p id="fileName" class="file-name" style="margin-bottom:0px;">No file is selected</p>
+                </div>
+                <!--     绘图的容器           -->
+                <!-- <div id="main" style="width: 310px;height:300px;"></div> -->
+                <hr style="border: none; border-top: 2px dashed #ccc;">
+                <i class="far fa-images" style="vertical-align: middle; color: #989595; font-size: 20px;"></i>
+                <!-- Venn diagram -->
+                <!-- Data Visualization -->
+                <span style="font-size: large; vertical-align: middle;">Venn diagram</span>
+                <div id="venn"></div>
+                <!-- <div id="boxplot" style="width: 290px;height:200px;"></div> -->
+            </div>
+
+        </div>
+    </div>
+
+    <!-- 引入 Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="../static/venn.js"></script>
+</body>
+
+</html>
+<!-- 引入jQuery -->
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+
+<script>
+    $(document).ready(function () {
+        // 初始化发送按钮为可用状态
+        $("#sendMessage").prop("disabled", false);
+        //初始化表示没有在发送请求
+        var isSending = false;
+        // <!--绘图的数据-->
+        // var scatterData = [
+        //     [5, 99], [7, 86], [8, 87], [7, 88], [2, 111],
+        //     [17, 86], [2, 103], [9, 87], [4, 94], [11, 78],
+        //     [12, 77], [9, 85], [6, 86]
+        // ];
+        // 韦恩图绘图数据
+        var vennData = [
+            { sets: [" Random Forest"], size: 10 },
+            { sets: ["LASSO"], size: 5 },
+            { sets: ["LASSO", " Random Forest"], size: 3, label: "3" },
+        ];
+        // 函数用于绑定历史记录项的点击事件
+        function bindHistoryItemClick() {
+            $(".message-question .list-group-item").click(function () {
+                $(".message-question .list-group-item").removeClass("selected");
+
+                // 添加点击样式
+                $(this).addClass("selected");
+                var question = $(this).text();  // 获取点击的历史记录项的问题内容
+                var answer = $(this).data("answer");  // 获取点击的历史记录项的答案内容
+
+                // 清除已显示的内容
+                $("#chatBox").empty();
+                // 将问题和答案显示到聊天对话框中
+                $("#chatBox").append('<div class="message-question">' +
+                    '<div class="message-content">' +
+                    '<p>' + question + '</p>' +
+                    '<i class="fas fa-user user-icon" style="color:#36ad6a;"></i>' +
+                    '</div>' +
+                    '</div>');
+                // 将后端返回的答案即时显示到聊天对话列表
+                $("#chatBox").append('<div class="message-answer text-start">' +
+                    '<div class="answer-content">' +
+                    '<i class="fas fa-robot robot-icon"></i> ' +
+                    '<p>' + formatCodeBlocks(answer) + '</p>' +
+                    '</div>' +
+                    '</div>');
+
+                // 滚动到聊天框底部以显示最新消息
+                $("#chatBox").scrollTop($("#chatBox")[0].scrollHeight);
+            });
+        }
+        // 点击历史记录的函数
+        bindHistoryItemClick();
+        // // 点击历史记录项时的事件处理
+        // $(".message-question .list-group-item").click(function () {
+        //     $(".message-question .list-group-item").removeClass("selected");
+
+        //     // 将当前点击的项的背景颜色设置为 #cdcdcd
+        //     $(this).addClass("selected");
+        //     var question = $(this).text();  // 获取点击的历史记录项的问题内容
+        //     var answer = $(this).data("answer");  // 获取点击的历史记录项的答案内容
+        //     console.log(answer);
+        //     // 清除已显示的内容
+        //     $("#chatBox").empty();
+
+        //     // 将问题和答案显示到聊天对话框中
+        //     $("#chatBox").append('<div class="message-question">' +
+        //         '<div class="message-content">' +
+        //         '<p>' + question + '</p>' +
+        //         '<i class="fas fa-user user-icon" style="color:#36ad6a;"></i>' +
+        //         '</div>' +
+        //         '</div>');
+        //     // 将后端返回的答案即时显示到聊天对话列表
+        //     $("#chatBox").append('<div class="message-answer text-start">' +
+        //         '<div class="answer-content">' +
+        //         '<i class="fas fa-robot robot-icon"></i> ' +
+        //         '<p>' + formatCodeBlocks(answer) + '</p>' +
+        //         '</div>' +
+        //         '</div>');
+        //     // 滚动到聊天框底部以显示最新消息
+        //     $("#chatBox").scrollTop($("#chatBox")[0].scrollHeight);
+        // });
+
+        //<!--匹配代码块-->
+        function formatCodeBlocks(answer) {
+            // 使用正则表达式匹配代码块
+            const codeBlockRegex = /```([\s\S]*?)```/g;
+            let formattedAnswer = answer.replace(codeBlockRegex, function (match, code) {
+                // 对找到的代码块进行HTML编码以防止XSS攻击
+                const encodedCode = code.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                return `<pre><code class="code">${encodedCode}</code></pre>`;
+            });
+            return formattedAnswer;
+        }
+        // 发送消息的逻辑封装成函数，以便重用
+        function sendMessage() {
+            if (isSending) return; //如果已经在发送请求，则不发送新的请求
+            isSending = true;
+            var message = $("#messageInput").val();
+            if (message.trim() === '') return; // 防止发送空消息
+            console.log(message)
+            // 禁用发送按钮，等待服务器响应
+            $("#sendMessage").prop("disabled", true); //服务器未回复 按钮为禁用状态
+
+            // 将发送的问题即时显示到聊天对话列表并添加到历史聊天列表
+            $("#chatBox").append('<div class="message-question">' +
+                '<div class="message-content">' +
+                '<p>' + message + '</p>' +
+                '<i class="fas fa-user user-icon" style="color:#36ad6a;"></i>' +
+                '</div>' +
+                '</div>');
+            //添加到历史记录中去
+            $("#todayChats").prepend('<li class="list-group-item"> <i class="far fa-comment-dots"></i> ' + message + '</li>');
+            // 发送消息到后端
+            $.ajax({
+                type: "POST",
+                url: "/send_message",
+                data: { message: message },
+                success: function (response) {
+                    // 将后端返回的答案即时显示到聊天对话列表
+                    $("#chatBox").append('<div class="message-answer text-start">' +
+                        '<div class="answer-content">' +
+                        '<i class="fas fa-robot robot-icon"></i> ' +
+                        '<p>' + formatCodeBlocks(response.answer) + '</p>' +
+                        '</div>' +
+                        '</div>');
+                    // 清空输入框
+                    $("#messageInput").val('');
+
+                    // 滚动到聊天框底部以显示最新消息
+                    $("#chatBox").scrollTop($("#chatBox")[0].scrollHeight);
+
+                    // 启用发送按钮，因为已经收到了回答
+                    $("#sendMessage").prop("disabled", false);
+                    isSending = false;
+                    //如果数据不为空，就可以绘图
+                    // var points = response.data;
+                    // charts(points);
+                    // 韦恩图绘制
+                    drawVennDiagram(vennData);
+                },
+                error: function (error) {
+                    console.log("发送消息出错", error);
+                    // 在出错的情况下也启用发送按钮，允许用户重试
+                    $("#sendMessage").prop("disabled", false);
+                    isSending = false;
+                }
+            });
+        }
+        // New Chat Area Click Event
+        $("#newChatArea").click(function () {
+            // 移除点击历史记录时的样式
+            $(".message-question .list-group-item").removeClass("selected");
+            $("#chatBox").empty(); // Clear the chat box
+            $("#messageInput").val('');
+            // 清除文件上传部分的文件名显示
+            $('#fileName').text('No file is selected').removeClass('file-name-display');
+            // 清除文件上传表单的值
+            $('#fileUpload').val('');
+            // 重新绑定历史记录项的点击事件
+            bindHistoryItemClick();
+        });
+        // 点击发送按钮时调用 sendMessage 函数
+        $("#sendMessage").click(function () {
+            sendMessage();
+
+        });
+        // //使用echarts进行绘图
+        // function charts() { // 基于准备好的dom，初始化echarts实例
+        //     var myChart = echarts.init(document.getElementById('boxplot'));
+
+        //     // 指定图表的配置项和数据
+        //     var option = {
+               
+        //         tooltip: {
+        //             trigger: 'item',
+        //             axisPointer: {
+        //                 type: 'shadow'
+        //             }
+        //         },
+        //         grid: {
+        //             left: '10%',
+        //             right: '10%',
+        //             bottom: '15%'
+        //         },
+        //         xAxis: {
+        //             type: 'category',
+        //             data: ['Lachnospiraceae_NK4A136_group']
+        //         },
+        //         yAxis: {
+        //             type: 'value'
+        //         },
+        //         series: [
+        //             {
+        //                 name: 'boxplot',
+        //                 type: 'boxplot',
+        //                 data: [
+        //                     [1.115200, 3.037275, 5.367500, 9.192300, 15.581000]
+        //                 ],
+        //                 itemStyle: {
+        //                 color: '#5470c6',
+        //                 borderColor: '#5470c6'
+        //             },
+        //                 tooltip: {
+        //                     formatter: function (param) {
+        //                         return [
+        //                             'Maximum: ' + param.data[4],
+        //                             '75% percentile: ' + param.data[3],
+        //                             'Median: ' + param.data[2],
+        //                             '25% percentile: ' + param.data[1],
+        //                             'Minimum: ' + param.data[0]
+        //                         ].join('<br/>');
+        //                     }
+        //                 }
+        //             }
+        //         ]
+        //     };
+
+        //     // 使用刚指定的配置项和数据显示图表
+        //     myChart.setOption(option);
+        // }
+        // charts();
+        // 按下回车键时也调用 sendMessage 函数
+        $("#messageInput").keypress(function (e) {
+            if (e.which == 13 && !isSending) { // 回车键的键码是 13 服务器未返回信息 回车键发送信息也是禁用的
+                e.preventDefault(); // 防止默认行为（例如表单提交）
+                sendMessage();
+            }
+        });
+        // 文件上传逻辑
+        $('#fileUpload').change(function (e) {
+            var file = e.target.files[0]; // 获取文件引用
+            if (!file) {
+                $('#fileName').text('No file is selected').removeClass('file-name-display'); // 如果没有文件，重置文本
+                return;
+            }
+
+            // Calculate file size in KB
+            var fileSizeKB = Math.round(file.size / 1024);
+
+            $('#fileName').html('<i class="fas fa-check-circle success-icon me-1"></i>' + file.name.replace("csv", "xlsx") + ' (' + fileSizeKB + ' KB) file has been uploaded').addClass('file-name-display'); // 显示文件名和大小
+
+
+            var formData = new FormData();
+            formData.append('file', file); // 将文件添加到formData对象中
+
+            $.ajax({
+                url: '/upload_file',
+                type: 'POST',
+                data: formData,
+                processData: false, // 告诉jQuery不要处理发送的数据
+                contentType: false, // 告诉jQuery不要设置Content-Type请求头
+                success: function (response) {
+                    console.log('文件上传成功');
+                    // 可以在这里做一些上传成功后的操作 这是向中部聊天区域显示文件已经上传
+                    // $("#chatBox").append('<div class="message-question">' +
+                    //     '<div class="message-content">' +
+                    //     '<p>' + response.message + '</p>' +
+                    //     '<i class="fas fa-user user-icon" style="color:#36ad6a;"></i>' +
+                    //     '</div>' +
+                    //     '</div>');
+                },
+                error: function (jqXHR, textStatus, errorMessage) {
+                    console.log('文件上传失败: ' + errorMessage);
+                }
+            });
+        });
+
+
+        // 将绘制韦恩图的逻辑封装成一个函数
+        function drawVennDiagram(data) {
+            // 初始化韦恩图
+            var chart = venn.VennDiagram()
+                .wrap(false) // 调整选项
+                .width(300)  // 调整选项
+                .height(260); // 调整选项
+
+            // 选择韦恩图的容器并渲染
+            var div = d3.select("#venn").datum(data).call(chart);
+            div.selectAll("text").style("fill", "white");
+            div.selectAll(".venn-circle path").style("fill-opacity", .6);
+        }
+        drawVennDiagram(vennData);
+    });
+</script>
