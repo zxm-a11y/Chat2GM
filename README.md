@@ -1,30 +1,32 @@
 # Chat2GM
 ## Introduce
-Chat2GM - a LLM module has been developed especially for **gut microbiota** data analysis using **the LangChain framework** and **API of the OpenAI GPT model**. <br>The module is composed of webpage templates and back-end python service using **Python Flask framework**. The webpage is for users to upload data and input prompts, and it has an aesthetic interface design and clear layouts. 
+Chat2GM - a LLM module has been developed especially for **gut microbiota** data analysis using **the LangChain framework** and **API of the OpenAI GPT model**. <br>The module comprises webpage templates and back-end python service using **Python Flask framework**. The webpage allows users to upload data and input prompts, and it has an aesthetic interface design and clear layouts. 
 #### The layout and function of Chat2GM user interface
 * Left part is for starting a new chat and listing the chat history.
 * Question-Answer pairs are shown in the middle zone.
-* An input box is set for giving instruc-tions or prompts on the bottom of the middle part.
-* On the right side,the file-upload button is for uploading data with Excel format, and some simple charts could be shown for the analysis.
+* An input box is set for giving instructions or prompts on the bottom of the middle part.
+* On the right side,the file-upload button is for uploading data in Excel format; some simple charts could be shown for the analysis.
 #### The Chat2GM user interface display
 .<div align=center><img src="https://github.com/zxm-a11y/Chat2GM/assets/156500479/e4df0dd8-939a-484a-8e86-0b08e28858e1" /></div>
 ## Instruction
-### 1.API准备
-(1)项目默认使用OpenAI接口，需前往[OpenAI注册页面](https://beta.openai.com/signup "OpenAI注册页面")创建账号，创建完账号则前往[API管理页面](https://beta.openai.com/account/api-keys,"API管理页面")创建一个API Key 并保存下来，后面需要在项目中配置这个key。接口需要海外网络访问及绑定信用卡支付。<br>
-(2)在[serper.com](https://serper.dev/api-key,"serper.com")官网申请serper的key,用于配置在项目中实现搜索功能的key
-### 2.运行环境
-#### (1)克隆项目代码
+### 1.Prepare API
+(1)The project uses the **OpenAI interface**. You need to go to [OpenAI Registration Page](https://beta.openai.com/signup "OpenAI Registration Page") to create an account, and then go to [API Management Page](https://beta.openai.com/account/API-keys "API Management Page") to create an API after creating the account. The interface requires overseas network access and binding credit card payment.
+<br>
+(2)Apply for **serper's key** in [serper.com](https://serper.dev/API-key "serper.com") in official website to configure the key to realize the search function in the project.
+### 2.Operate environment
+Windows system is supported, and Python needs to be installed. `Python 3.11.8` was used in the development of this project.
+#### (1)Clone project code
 ```python  
 git clone https://github.com/zxm-a11y/Chat2GM
-cd Chat2GM/  
+cd Chat2GM/programs  
 ```
-#### (2)安装核心依赖
+#### (2)Install core dependencies
 ```python
 pip3 install -r requirements.txt
 ```
-### 3.配置
-配置openai的api和搜索的api
-### 4.本地运行
+### 3.Configuration
+Configure the api of **openai** and the key of **serper** in the `main.py` file.
+### 4.Run locally
 ```python
 python3 main.py
 ```
