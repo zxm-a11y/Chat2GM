@@ -1,57 +1,86 @@
-from flask import Flask, render_template, request, jsonify
 import os
-# 文件上传
-from werkzeug.utils import secure_filename
-from langchain.chat_models import ChatOpenAI
-from langchain_experimental.agents import create_csv_agent
-from models import db, Chat, ChatHistory
-from datetime import datetime, timedelta
-# 导入加载工具的库 使用initialize_agent初始化agent 配置搜索工具
-from langchain.agents import load_tools
-from langchain.agents import initialize_agent
-from langchain.agents import AgentType
-from langchain.llms import OpenAI
-# 配置日志
 import logging
+from datetime import datetime, timedelta
+import pandas as pd
+from flask import Flask, render_template, request, jsonify
+from werkzeug.utils import secure_filename
 from logging.handlers import RotatingFileHandler
-# 配置日志记录
+from langchain_openai import ChatOpenAI
+from models import db, Chat, ChatHistory
+from langchain_experimental.agents import create_pandas_dataframe_agent
+
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.vectorstores import Chroma
+from langchain_community.embeddings import OllamaEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain.tools.retriever import create_retriever_tool
+from langgraph.prebuilt import create_react_agent
+from langchain.schema import HumanMessage
+
+# Environment variables for sensitive keys
+os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_API_KEY"] = "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"
+os.environ["SERPAPI_API_KEY"] = "944d35e4e36b87efc1e0eb3660604db2bc9a8060df3c8b96a789e9089e3fc88c"
+
+# Configure logging
 logging.basicConfig(level=logging.INFO)
-# 创建一个日志处理器，用于写入日志文件
 file_handler = RotatingFileHandler('app.log', maxBytes=1024 * 1024, backupCount=10)
 file_handler.setLevel(logging.INFO)
-# 创建一个日志格式器并添加到处理器
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 file_handler.setFormatter(formatter)
-# 将处理器添加到日志记录器
 logging.getLogger('').addHandler(file_handler)
-# 设置OpenAI API Key
-os.environ["OPENAI_API_KEY"] = "YOUR OPENAI_API_KEY"
-# 搜索的密钥
-os.environ["SERPAPI_API_KEY"] = "YOUR SERPAPI_API_KEY"
-# 配置大模型
-llm = ChatOpenAI(temperature=0.0, model="gpt-4")
-# 加载工具 配置serpapi搜索工具
-llms = OpenAI(temperature=0,model_name="gpt-3.5-turbo")
-tools = load_tools(["serpapi"])
 
+# Initialize Flask app
 app = Flask(__name__)
-# 配置数据库
+
+# Configure database
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///chat_history.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
 with app.app_context():
     db.create_all()
-# 定义csv_file_path为全局变量  为将上传的文件传入到agent中
+
+# Global variable to store CSV file path
 csv_file_path = None
+
+# Initialize LLM
+llm = ChatOpenAI(
+    openai_api_base="https://www.apigptopen.xyz/v1",
+    openai_api_key="sk-vowNrKrNfzCDjMfkC9D018E5A4Bc4f6891C96228991f39Ad",
+    temperature=0
+)
+
+PDF = 'gut_microbiota.pdf'
+loader = PyPDFLoader(PDF)
+docs = loader.load()
+
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+splits = text_splitter.split_documents(docs)
+vectorstore = Chroma.from_documents(documents=splits, embedding=OllamaEmbeddings(model="nomic-embed-text"))
+
+# Retrieve and generate using the relevant snippets of the blog.
+retriever = vectorstore.as_retriever()
+
+# Create retriever tool
+tool = create_retriever_tool(
+    retriever,
+    "search_agents_answer",
+    "Searches and returns context from LLM Powered Autonomous Agents. Answering questions about the gut microbiota.",
+)
+tools = [tool]
+
+# Create REACT agent executor
+agent_executor = create_react_agent(llm, tools)
+
 @app.route("/")
 def index():
-    # 将聊天记录按照时间
+    # Fetch chat history and categorize by date
     chats = Chat.query.order_by(Chat.start_time.desc()).all()
     chat_histories = {
         "today": [],
         "yesterday": [],
         "older": [],
-        "flag":False
+        "flag": False
     }
     today = datetime.utcnow().date()
     for chat in chats:
@@ -63,12 +92,15 @@ def index():
                 chat_histories["yesterday"].append((chat.id, history))
             else:
                 chat_histories["older"].append((chat.id, history))
-    
+
     logging.info("Rendering index page with %d chat records", len(chats))
     return render_template('index.html', chat_histories=chat_histories)
-# 上传文件
+
+
+# File upload endpoint
 @app.route('/upload_file', methods=['POST'])
 def upload_file():
+    global csv_file_path
     if 'file' not in request.files:
         return jsonify({"error": "No file part"}), 400
     file = request.files['file']
@@ -78,41 +110,58 @@ def upload_file():
         filename = secure_filename(file.filename)
         filepath = os.path.join('./', filename)
         file.save(filepath)
-        # 文件路径存储
-        global csv_file_path
         csv_file_path = filepath
         logging.info("CSV file '%s' uploaded successfully", filename)
-        return jsonify({"status": "success", "flag":True,"message": "orginal file has been uploaded"}), 200
+        return jsonify({"status": "success", "flag": True, "message": "Original file has been uploaded"}), 200
     else:
         return jsonify({"error": "Invalid file type"}), 400
-# 发送消息
+
+
+# Send message endpoint
 @app.route('/send_message', methods=['POST'])
 def send_message():
+    global csv_file_path
     message = request.form['message']
     logging.info("Received message: %s", message)
-    print("接收到的消息:", message)
-    # 根据是否上传了文件进行判断 如果上传了文件就是用langchain create_csv_agent
+
+    # Handle message with appropriate agent
     if csv_file_path:
-        answer = chat_with_csv_agent(message)
+        df = pd.read_csv(csv_file_path)
+        answer = chat_with_csv_agent(message, df)
     else:
-        # 进行对话 问关于细菌的问题会使用配置的搜索工具
         answer = chat_google(message)
-    new_chat = Chat()
+
+    # Create chat and history records
+    new_chat = Chat(start_time=datetime.utcnow())
     db.session.add(new_chat)
     db.session.flush()
     chat_id = new_chat.id
-    chat_record = ChatHistory(chat_id=chat_id,message=message, response=str(answer))
+
+    chat_record = ChatHistory(chat_id=chat_id, message=message, response=str(answer))
     db.session.add(chat_record)
     db.session.commit()
+
     return jsonify({"status": "success", "answer": str(answer)})
-# langchain聊天
-# 上传文件之后 文件数据分析使用的是create_csv_agent
-def chat_with_csv_agent(q):
-    agent = create_csv_agent(llm, csv_file_path, verbose=True)
-    return agent.run(q)
-# 没有上传文件，直接对话使用的是 用initialize_agent初始化后的agent 配置了搜索的功能
+
+
+# Chat with CSV agent
+def chat_with_csv_agent(q, df):
+    agent = create_pandas_dataframe_agent(
+        llm,
+        df,
+        agent_type="tool-calling",
+        verbose=True,
+        allow_dangerous_code=True
+    )
+    return agent.invoke(q)
+
+
+# Chat with Google and retriever tools
 def chat_google(q):
-    agents = initialize_agent(tools, llms, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, verbose=True)
-    return agents.run(q)
+    meg = agent_executor.invoke({"messages": [HumanMessage(content=q)]})
+    return meg['messages'][3].content
+
+
 if __name__ == '__main__':
-    app.run()
+    # Avoid double loading in debug mode
+    app.run(debug=True, use_reloader=False)
